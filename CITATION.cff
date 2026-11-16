@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use the code, the models or the results of this project, please cite it as below."
+type: software
+title: "Branchy: parallel learned branches for language-model inference across devices on a wide-area network"
+abstract: "A transformer whose middle part is a set of parallel branches that run on different devices and are fused on one of them, trained with branch dropout and a one-token delay so that the coordinating device never waits for the network inside a token. Code, trained 300M models, measurements on real devices over a VPN, and a write-up."
+authors:
+  - name: "ManuXD32"
+    website: "https://github.com/ManuXD32"
+date-released: "2026-11-15"
+license: Apache-2.0
+keywords:
+  - distributed inference
+  - transformer architecture
+  - edge devices
+  - local LLM

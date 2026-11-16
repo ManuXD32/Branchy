@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branchy coordinator</title>
+<style>
+:root { --bg: #f6f5f1; --card: #ffffff; --ink: #14140f; --ink2: #5a5953; --line: #dddbd3; --accent: #2a78d6; --accent-ink: #ffffff;
+        --bar: #2a78d6; --bar2: #8d8c86; --good: #1d7a43; --bad: #b3261e; --field: #ffffff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #171715; --card: #20201d; --ink: #f0efea; --ink2: #b3b1a8; --line: #3a3934;
+        --accent: #3987e5; --bar: #3987e5; --bar2: #77766f; --good: #5fc48a; --bad: #f08a80; --field: #2a2a26; } }
+:root[data-theme="dark"] { --bg: #171715; --card: #20201d; --ink: #f0efea; --ink2: #b3b1a8; --line: #3a3934; --accent: #3987e5; --bar: #3987e5;
+        --bar2: #77766f; --good: #5fc48a; --bad: #f08a80; --field: #2a2a26; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+header { padding: 14px 16px 0; max-width: 1180px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 0; display: inline-block; }
+#state { color: var(--ink2); margin-left: 12px; font-size: 13px; }
+nav { display: flex; gap: 4px; margin-top: 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink2); font: inherit; padding: 8px 12px; cursor: pointer; white-space: nowrap; }
+nav button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+main { max-width: 1180px; margin: 0 auto; padding: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+label { display: grid; gap: 3px; font-size: 12.5px; color: var(--ink2); }
+input, select, textarea { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; }
+input[type=number] { width: 84px; }
+textarea { width: 100%; min-height: 70px; resize: vertical; }
+button.act { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 7px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+button.plain { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 7px; padding: 7px 12px; font: inherit; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+.configs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.cfg { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; }
+.cfg .row { margin-top: 8px; }
+.muted { color: var(--ink2); font-size: 13px; }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.res h3 { margin: 0 0 2px; font-size: 15px; }
+.big { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.big small { font-size: 13px; font-weight: 400; color: var(--ink2); }
+.text { white-space: pre-wrap; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; font-size: 14px; }
+.bars { display: grid; gap: 6px; margin: 4px 0 2px; }
+.bar { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 64px; gap: 8px; align-items: center; font-size: 13px; }
+.bar .track { height: 12px; }
+.bar .fill { height: 12px; background: var(--bar); border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar.ref .fill { background: var(--bar2); }
+.bar .v { font-variant-numeric: tabular-nums; text-align: right; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--ink2); font-weight: 600; font-size: 12.5px; }
+td.n, th.n { text-align: right; }
+.ok { color: var(--good); } .err { color: var(--bad); }
+.scroll { overflow-x: auto; }
+pre { white-space: pre-wrap; font-size: 12.5px; color: var(--ink2); margin: 8px 0 0; }
+code { background: var(--field); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header><h1>Branchy coordinator</h1><span id="state"></span>
+<nav id="nav"></nav></header>
+<main id="main"></main>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const f1 = v => v == null ? '–' : v.toFixed(1), f2 = v => v == null ? '–' : v.toFixed(2);
+const TABS = [['compare', 'Compare'], ['benchmark', 'Benchmark'], ['cluster', 'Cluster']];
+let tab = location.hash.slice(1) || 'compare', info = null, job = {state: 'idle'}, timer = null;
+let prompt = 'Once upon a time, there was a little dragon who lived in a cave near a quiet village.', settings = {max_tokens: 120, temperature: 0.8, seed: 1};
+let configs = [], bench = {model: null, placements: '', prompt_tokens: 32, decode: 48, runs: 2};
+const busy = () => ['loading', 'deploying', 'running'].includes(job.state);
+const api = async (path, body) => (await fetch(path, body ? {method: 'POST', body: JSON.stringify(body)} : undefined)).json();
+
+function firstOf(kind) { return Object.keys(info.models).find(k => info.models[k].kind === kind); }
+function defaults() {
+  const seq = firstOf('sequential'), br = firstOf('branched'), w = info.workers.filter(n => !/^(server|local)$/.test(n));
+  configs = [];
+  if (seq) configs.push({label: 'Sequential model, this machine', model: seq, layers: {}, workers: {}, leave_out: 0});
+  if (seq && w.length) { const m = info.models[seq], each = Math.floor(m.blocks / (w.length + 1));
+    configs.push({label: 'Layer split over the workers', model: seq, layers: Object.fromEntries(w.map(n => [n, each])), workers: {}, leave_out: 0}); }
+  if (br) { const m = info.models[br], each = w.length ? Math.floor(m.branches / (w.length + 1)) : 0;
+    configs.push({label: w.length ? 'Branches on the workers' : 'Branched model, this machine', model: br, layers: {}, workers: Object.fromEntries(w.map(n => [n, each])), leave_out: 0}); }
+  bench.model = br || seq; bench.placements = suggest(bench.model);
+}
+function suggest(name) {
+  const m = info.models[name], w = info.workers.filter(n => !/^(server|local)$/.test(n)), lines = [];
+  const range = (a, b) => a === b - 1 ? `${a}` : `${a}-${b - 1}`;
+  if (m.kind === 'sequential') {
+    lines.push(`alone=local:${range(0, m.blocks)}`);
+    w.forEach(n => { const h = Math.ceil(m.blocks / 2); lines.push(`with-${n}=local:${range(0, h)};${n}:${range(h, m.blocks)}`); });
+    if (w.length > 1) { const each = Math.floor(m.blocks / (w.length + 1)); let a = m.blocks - each * w.length, s = `all=local:${range(0, a)}`;
+      w.forEach(n => { s += `;${n}:${range(a, a + each)}`; a += each; }); lines.push(s); }
+  } else {
+    lines.push(`alone=local:${range(0, m.branches)}`);
+    w.forEach(n => { const h = Math.ceil(m.branches / 2); lines.push(`with-${n}=local:${range(0, h)};${n}:${range(h, m.branches)}`); });
+    if (w.length > 1) { const each = Math.floor(m.branches / (w.length + 1)); let a = m.branches - each * w.length, s = `all=local:${range(0, a)}`;
+      w.forEach(n => { s += `;${n}:${range(a, a + each)}`; a += each; }); lines.push(s); }
+  }
+  return lines.join('\n');
+}
+
+function cfgCard(c, i) {
+  const m = info.models[c.model], w = info.workers;
+  const models = Object.entries(info.models).map(([k, v]) => `<option value="${esc(k)}" ${k === c.model ? 'selected' : ''}>${esc(k)} (${esc(v.label)})</option>`).join('');
+  const fields = m.kind === 'sequential'
+    ? w.map(n => `<label>blocks on ${esc(n)}<input type="number" min="0" max="${m.blocks - 1}" value="${c.layers[n] || 0}" data-i="${i}" data-layer="${esc(n)}"></label>`).join('')
+    : w.map(n => `<label>branches on ${esc(n)}<input type="number" min="0" max="${m.branches - 1}" value="${c.workers[n] || 0}" data-i="${i}" data-worker="${esc(n)}"></label>`).join('')
+      + `<label>left out<input type="number" min="0" max="${m.branches - 1}" value="${c.leave_out || 0}" data-i="${i}" data-leave="1"></label>`;
+  const note = m.kind === 'sequential' ? `${m.blocks} blocks; the rest stays on this machine. Each token waits for every worker in turn (layer split).`
+    : `${m.branches} branches; the rest stays on this machine.` + (m.delay ? ' Remote branches are used one token late, so nothing waits for the network.' : ' Every token waits for the remote branches.');
+  return `<div class="cfg"><div class="row"><label style="flex:1">name<input value="${esc(c.label)}" data-i="${i}" data-label="1" style="width:100%"></label>
+    <button class="plain" data-remove="${i}" title="remove this configuration">remove</button></div>
+    <div class="row"><label style="flex:1">model<select data-i="${i}" data-model="1" style="width:100%">${models}</select></label></div>
+    <div class="row">${fields || '<span class="muted">no workers in the cluster file</span>'}</div><p class="muted" style="margin:8px 0 0">${note}</p></div>`;
+}
+function resultCards() {
+  const rs = job.kind === 'compare' ? job.results || [] : [];
+  if (!rs.length) return '';
+  const top = Math.max(...rs.map(r => r.decode_tps || r.wall_tps || 0), 0.001);
+  const bars = rs.map(r => { const v = r.decode_tps || r.wall_tps; return `<div class="bar"><span>${esc(r.label)}</span><div class="track"><div class="fill" style="width:${v ? 100 * v / top : 0}%"></div></div><span class="v">${v ? f1(v) : '–'}</span></div>`; }).join('');
+  const cards = rs.map(r => { const b = r.breakdown_ms, v = r.decode_tps || r.wall_tps;
+    const rem = Object.entries(r.remote || {}).map(([n, x]) => `${esc(n)}: round trip ${f1(x.round_trip_ms)} ms (compute ${f1(x.compute_ms)}, network ${f1(x.network_ms)})`).join('<br>');
+    return `<div class="card res"><h3>${esc(r.label)}</h3><div class="muted">${esc(r.placement || r.model)}</div>
+      <div class="big">${v ? f1(v) : '–'} <small>tokens per second${r.state === 'running' ? ' (so far)' : ''}</small></div>
+      ${r.error ? `<div class="err">${esc(r.error)}</div>` : ''}
+      ${b ? `<div class="muted">per token ${f1(r.step_ms)} ms: here ${f1(b.shared + b.local + b.fuse)} ms, waiting for workers ${f1(b.wait)} ms${rem ? '<br>' + rem : ''}</div>` : `<div class="muted">${esc(r.state)}</div>`}
+      <div class="text">${esc(job.prompt)}<b>${esc(r.text || '')}</b></div></div>`; }).join('');
+  return `<div class="card"><b>Speed while writing (tokens per second)</b><div class="bars" style="margin-top:8px">${bars}</div></div><div class="results">${cards}</div>`;
+}
+function renderCompare() {
+  $('#main').innerHTML = `<div class="card"><label>Beginning of the text<textarea id="prompt">${esc(prompt)}</textarea></label>
+    <div class="row" style="margin-top:10px"><label>new tokens<input type="number" id="mt" min="1" max="${info.max_new}" value="${settings.max_tokens}"></label>
+    <label>temperature (0 = always the most likely word)<input type="number" id="temp" min="0" max="2" step="0.1" value="${settings.temperature}"></label>
+    <label>seed<input type="number" id="seed" value="${settings.seed}"></label>
+    <button class="act" id="go" ${busy() ? 'disabled' : ''}>Run all configurations</button><button class="plain" id="stop" ${busy() ? '' : 'disabled'}>Stop</button>
+    <span class="muted" id="st">${esc(job.status_text || '')}${job.error ? `<span class="err"> ${esc(job.error)}</span>` : ''}</span></div></div>
+    <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:10px"><b>Configurations</b><button class="plain" id="add">Add a configuration</button></div>
+    <div class="configs">${configs.map(cfgCard).join('')}</div></div><div id="out">${resultCards()}</div>`;
+  $('#prompt').oninput = e => prompt = e.target.value;
+  $('#mt').oninput = e => settings.max_tokens = +e.target.value; $('#temp').oninput = e => settings.temperature = +e.target.value; $('#seed').oninput = e => settings.seed = +e.target.value;
+  $('#add').onclick = () => { configs.push({label: `Configuration ${configs.length + 1}`, model: Object.keys(info.models)[0], layers: {}, workers: {}, leave_out: 0}); renderCompare(); };
+  document.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { configs.splice(+b.dataset.remove, 1); renderCompare(); });
+  document.querySelectorAll('[data-label]').forEach(el => el.oninput = () => configs[+el.dataset.i].label = el.value);
+  document.querySelectorAll('[data-model]').forEach(el => el.onchange = () => { const c = configs[+el.dataset.i]; c.model = el.value; c.layers = {}; c.workers = {}; c.leave_out = 0; renderCompare(); });
+  document.querySelectorAll('[data-layer]').forEach(el => el.oninput = () => configs[+el.dataset.i].layers[el.dataset.layer] = +el.value);
+  document.querySelectorAll('[data-worker]').forEach(el => el.oninput = () => configs[+el.dataset.i].workers[el.dataset.worker] = +el.value);
+  document.querySelectorAll('[data-leave]').forEach(el => el.oninput = () => configs[+el.dataset.i].leave_out = +el.value);
+  $('#go').onclick = async () => { const r = await api('/api/compare', {prompt, ...settings, configs: configs.map(c => ({label: c.label, model: c.model, layers: Object.entries(c.layers), workers: c.workers, leave_out: c.leave_out}))});
+    if (r.error) { $('#st').innerHTML = `<span class="err">${esc(r.error)}</span>`; return; } poll(true); };
+  $('#stop').onclick = () => api('/api/stop', {});
+}
+function benchTable() {
+  const rows = job.kind === 'benchmark' ? job.rows || [] : [];
+  if (!rows.length) return job.kind === 'benchmark' && job.log?.length ? `<div class="card"><pre>${esc(job.log.join('\n'))}</pre></div>` : '';
+  const top = Math.max(...rows.map(r => r.decode_tps));
+  return `<div class="card"><b>Tokens per second while writing</b><div class="bars" style="margin-top:8px">${rows.map((r, i) => `<div class="bar ${i ? '' : 'ref'}"><span>${esc(r.placement)}</span><div class="track"><div class="fill" style="width:${100 * r.decode_tps / top}%"></div></div><span class="v">${f2(r.decode_tps)}</span></div>`).join('')}</div>
+    <p class="muted" style="margin:8px 0 0">The first placement (grey) is the reference: the others must reproduce its output.</p></div>
+    <div class="card scroll"><table><thead><tr><th>Placement</th><th class="n">Devices</th><th class="n">Tokens/s</th><th class="n">Prompt tokens/s</th><th class="n">Token time, median ms</th><th class="n">Slowest 5%, ms</th><th class="n">Waiting for workers, ms</th><th>Same output as the reference</th><th>Workers: round trip (compute + network), ms</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td>${esc(r.placement)}</td><td class="n">${r.devices}</td><td class="n">${f2(r.decode_tps)}</td><td class="n">${f1(r.prefill_tps)}</td><td class="n">${f1(r.step_p50_ms)}</td><td class="n">${f1(r.step_p95_ms)}</td><td class="n">${f1(r.wait_ms)}</td>
+      <td class="${/FAIL/.test(r.parity) ? 'err' : 'ok'}">${esc(r.parity)}${r.max_abs_logit_diff ? ` (largest difference ${r.max_abs_logit_diff.toExponential(1)})` : ''}</td>
+      <td>${Object.entries(r.remote).map(([n, x]) => `${esc(n)}: ${f1(x.round_trip_ms)} (${f1(x.compute_ms)} + ${f1(x.network_ms)})`).join('<br>')}</td></tr>`).join('')}</tbody></table></div>
+    <details class="card"><summary>Log</summary><pre>${esc((job.log || []).join('\n'))}</pre></details>`;
+}
+function renderBenchmark() {
+  const models = Object.entries(info.models).map(([k, v]) => `<option value="${esc(k)}" ${k === bench.model ? 'selected' : ''}>${esc(k)} (${esc(v.label)})</option>`).join('');
+  $('#main').innerHTML = `<div class="card"><div class="row"><label>model<select id="bm">${models}</select></label>
+    <label>prompt tokens<input type="number" id="bp" min="1" max="512" value="${bench.prompt_tokens}"></label><label>new tokens<input type="number" id="bd" min="4" max="256" value="${bench.decode}"></label>
+    <label>runs<input type="number" id="br" min="1" max="5" value="${bench.runs}"></label><button class="plain" id="sg">Suggest placements</button></div>
+    <p class="muted" style="margin:12px 0 4px">Placements, one per line: <code>name=local:0-3;worker:4-7</code> (branch numbers for a branched model, block numbers for a sequential one; <code>none:7</code> leaves a branch out). The first line is the reference and must use <code>local</code> only.</p>
+    <textarea id="pl" aria-label="Placements" style="min-height:110px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px">${esc(bench.placements)}</textarea>
+    <div class="row" style="margin-top:10px"><button class="act" id="go" ${busy() ? 'disabled' : ''}>Run the benchmark</button><button class="plain" id="stop" ${busy() ? '' : 'disabled'}>Stop after this placement</button>
+    <span class="muted" id="st">${esc(job.kind === 'benchmark' ? job.status_text || '' : '')}${job.kind === 'benchmark' && job.error ? `<span class="err"> ${esc(job.error)}</span>` : ''}</span></div></div><div id="out">${benchTable()}</div>`;
+  $('#bm').onchange = e => { bench.model = e.target.value; bench.placements = suggest(bench.model); renderBenchmark(); };
+  $('#bp').oninput = e => bench.prompt_tokens = +e.target.value; $('#bd').oninput = e => bench.decode = +e.target.value; $('#br').oninput = e => bench.runs = +e.target.value;
+  $('#pl').oninput = e => bench.placements = e.target.value; $('#sg').onclick = () => { bench.placements = suggest(bench.model); renderBenchmark(); };
+  $('#go').onclick = async () => { const r = await api('/api/benchmark', {...bench, placements: bench.placements.split('\n')}); if (r.error) { $('#st').innerHTML = `<span class="err">${esc(r.error)}</span>`; return; } poll(true); };
+  $('#stop').onclick = () => api('/api/stop', {});
+}
+async function renderCluster() {
+  $('#main').innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><b>Workers in the cluster file</b><button class="plain" id="rf">Check again</button></div><div class="scroll" id="nodes"><p class="muted">asking the workers…</p></div></div>
+    <div class="card"><b>This machine (coordinator)</b><p class="muted" style="margin:6px 0 0">torch ${esc(info.torch)}, ${info.threads} threads, linear mode ${esc(info.linear)}. Models: ${Object.entries(info.models).map(([k, v]) => `${esc(k)} (${esc(v.label)}, ${(v.parameters / 1e6).toFixed(0)}M parameters)`).join('; ')}.</p></div>
+    <div class="card"><b>Adding a worker</b><p class="muted" style="margin:6px 0 0">Install the node on the device (see the README: one command), add its address to the cluster file and press “Check again”. Weights are sent to a worker the first time a placement uses it and are cached there.</p></div>`;
+  $('#rf').onclick = renderCluster;
+  const nodes = await api('/api/nodes');
+  if (tab !== 'cluster') return;
+  $('#nodes').innerHTML = nodes.length ? `<table><thead><tr><th>Worker</th><th>State</th><th class="n">Round trip, ms</th><th>Processor</th><th class="n">Threads</th><th>Attention / linear mode</th><th class="n">Free memory, MB</th><th>torch</th><th>Code version</th></tr></thead><tbody>
+    ${nodes.map(n => n.up ? `<tr><td>${esc(n.name)}</td><td class="ok">answers${n.busy ? ' (busy)' : ''}</td><td class="n">${f1(n.round_trip_ms)}</td><td>${esc(n.cpu)}</td><td class="n">${n.threads}</td><td>${esc(n.kernels)} / ${esc(n.linear)}</td><td class="n">${n.mem_available_mb ?? '–'}</td><td>${esc(n.torch)}</td><td>${esc(n.version)}</td></tr>`
+      : `<tr><td>${esc(n.name)}</td><td class="err">no answer</td><td colspan="7" class="muted">${esc(n.error)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">The cluster file lists no workers.</p>';
+}
+function render() {
+  $('#nav').innerHTML = TABS.map(([k, t]) => `<button aria-selected="${k === tab}" data-tab="${k}">${t}</button>`).join('');
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { location.hash = b.dataset.tab; });
+  if (tab === 'compare') renderCompare(); else if (tab === 'benchmark') renderBenchmark(); else renderCluster();
+}
+async function poll(force) {
+  clearTimeout(timer);
+  try { job = await api('/api/job'); } catch (e) { $('#state').textContent = 'the coordinator does not answer'; timer = setTimeout(poll, 2000); return; }
+  $('#state').textContent = busy() ? `${job.kind}: ${job.status_text || job.state}` : (job.state === 'idle' ? 'ready' : `last job: ${job.state}`);
+  if (tab === 'compare' && job.kind === 'compare') { $('#out').innerHTML = resultCards(); $('#st').innerHTML = esc(job.status_text || '') + (job.error ? `<span class="err"> ${esc(job.error)}</span>` : ''); $('#go').disabled = busy(); $('#stop').disabled = !busy(); }
+  if (tab === 'benchmark' && job.kind === 'benchmark') { $('#out').innerHTML = benchTable(); $('#st').innerHTML = esc(job.status_text || '') + (job.error ? `<span class="err"> ${esc(job.error)}</span>` : ''); $('#go').disabled = busy(); $('#stop').disabled = !busy(); }
+  if (busy() || force) timer = setTimeout(poll, 700);
+}
+addEventListener('hashchange', () => { tab = location.hash.slice(1) || 'compare'; render(); });
+(async () => { info = await api('/api/info'); defaults(); job = await api('/api/job'); render(); poll(); })();
+</script>
+</body>
+</html>

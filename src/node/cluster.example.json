@@ -1,0 +1,7 @@
+{
+ "token_file": ".secrets/node_token",
+ "nodes": {
+  "laptop": {"host": "192.168.1.20", "port": 8730, "note": "example: a Linux laptop"},
+  "phone": {"host": "192.168.1.30", "port": 8730, "note": "example: an Android phone running Termux"}
+ }
+}

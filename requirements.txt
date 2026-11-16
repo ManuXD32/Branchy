@@ -1,0 +1,7 @@
+# Coordinator (the machine that runs the web UI, the benchmarks or the training)
+torch>=2.2          # CPU build is enough for inference; training needs a GPU build
+numpy
+tokenizers          # web UI and text generation
+# Only for the quality benchmark and the pretrained-model experiments:
+# pyarrow, transformers, safetensors
+# Workers need only torch and numpy (the installer takes care of it; on Termux: pkg install python python-numpy python-torch)
